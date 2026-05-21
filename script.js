@@ -84,6 +84,44 @@ const PUZZLES = {
 };
 
 // ── UTILITIES ─────────────────────────────────────────
+function isValidSolution(board) {
+  // Check rows
+  for (let r = 0; r < 9; r++) {
+    const seen = new Set();
+    for (let c = 0; c < 9; c++) {
+      const val = board[r][c];
+      if (val < 1 || val > 9 || seen.has(val)) return false;
+      seen.add(val);
+    }
+  }
+
+  // Check columns
+  for (let c = 0; c < 9; c++) {
+    const seen = new Set();
+    for (let r = 0; r < 9; r++) {
+      const val = board[r][c];
+      if (val < 1 || val > 9 || seen.has(val)) return false;
+      seen.add(val);
+    }
+  }
+
+  // Check 3×3 boxes
+  for (let br = 0; br < 9; br += 3) {
+    for (let bc = 0; bc < 9; bc += 3) {
+      const seen = new Set();
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          const val = board[br + r][bc + c];
+          if (val < 1 || val > 9 || seen.has(val)) return false;
+          seen.add(val);
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
 function parseBoard(str) {
   const board = [];
   for (let r = 0; r < 9; r++) {
@@ -144,6 +182,9 @@ function loadPuzzle(level) {
   const pair = bank[Math.floor(Math.random() * bank.length)];
   const given = parseBoard(pair[0]);
   const solution = parseBoard(pair[1]);
+    if (!isValidSolution(solution)) {
+    console.error("Invalid solution detected:", pair[1]);
+  }
   return { given, solution };
 }
 
@@ -656,4 +697,13 @@ document.getElementById('btn-gameover-menu').addEventListener('click', () => {
 // ── INIT ──────────────────────────────────────────────
 initParticles();
 loadStats();
+Object.keys(PUZZLES).forEach(level => {
+  PUZZLES[level].forEach(([givenStr, solutionStr]) => {
+    const solution = parseBoard(solutionStr);
+    if (!isValidSolution(solution)) {
+      console.error(`Invalid solution in ${level}:`, solutionStr);
+    }
+  });
+});
+
 showScreen('screen-menu');
