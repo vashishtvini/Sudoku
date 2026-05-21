@@ -177,15 +177,56 @@ function solveSudokuBacktrack(board) {
 }
 
 // ── PUZZLE GENERATION ─────────────────────────────────
-function loadPuzzle(level) {
-  const bank = PUZZLES[level];
-  const pair = bank[Math.floor(Math.random() * bank.length)];
-  const given = parseBoard(pair[0]);
-  const solution = parseBoard(pair[1]);
-    if (!isValidSolution(solution)) {
-    console.error("Invalid solution detected:", pair[1]);
+async function loadPuzzle(level) {
+
+  try {
+
+    const response = await fetch(
+      `https://sugoku.onrender.com/board?difficulty=${level}`
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch puzzle');
+    }
+
+    const data = await response.json();
+
+    const given = data.board;
+
+    const solution =
+      solveSudokuBacktrack(
+        deepCopy(given)
+      );
+
+    return {
+      given,
+      solution
+    };
+
+  } catch (error) {
+
+    console.error('Puzzle API Error:', error);
+
+    // fallback puzzle
+    const given = [
+      [5,3,0,0,7,0,0,0,0],
+      [6,0,0,1,9,5,0,0,0],
+      [0,9,8,0,0,0,0,6,0],
+      [8,0,0,0,6,0,0,0,3],
+      [4,0,0,8,0,3,0,0,1],
+      [7,0,0,0,2,0,0,0,6],
+      [0,6,0,0,0,0,2,8,0],
+      [0,0,0,4,1,9,0,0,5],
+      [0,0,0,0,8,0,0,7,9]
+    ];
+
+    return {
+      given,
+      solution: solveSudokuBacktrack(
+        deepCopy(given)
+      )
+    };
   }
-  return { given, solution };
 }
 
 // ── BACKGROUND PARTICLES ──────────────────────────────
@@ -511,13 +552,16 @@ function getRating(mistakes, secs) {
 }
 
 function endGameOver() {
+
   stopTimer();
+
   state.stats.played++;
   state.stats.streak = 0;
+
   saveStats();
+updateMenuStats();
   showScreen('screen-gameover');
 }
-
 function spawnFireworks() {
   const container = document.getElementById('fireworks');
   container.innerHTML = '';
@@ -541,7 +585,7 @@ function spawnFireworks() {
 }
 
 // ── GAME INIT ─────────────────────────────────────────
-function startGame(level) {
+async function startGame(level) {
   state.level = level;
   state.currentLevel = level;
   state.seconds = 0;
@@ -552,7 +596,7 @@ function startGame(level) {
   state.notesMode = false;
   state.selected = null;
 
-  const { given, solution } = loadPuzzle(level);
+  const { given, solution } = await loadPuzzle(level);
   state.given = given;
   state.solution = solution;
   state.board = deepCopy(given); // copy given as starting board
@@ -585,14 +629,24 @@ function startGame(level) {
 }
 
 function autoSolve() {
-  for (let r = 0; r < 9; r++)
+
+  for (let r = 0; r < 9; r++) {
+
     for (let c = 0; c < 9; c++) {
+
       if (!state.given[r][c]) {
-        state.board[r][c] = state.solution[r][c];
+
+        state.board[r][c] =
+          state.solution[r][c];
+
         state.notes[r][c].clear();
       }
     }
+  }
+
   renderBoard();
+
+  checkWin();
 }
 
 // ── KEYBOARD SUPPORT ──────────────────────────────────
@@ -697,13 +751,27 @@ document.getElementById('btn-gameover-menu').addEventListener('click', () => {
 // ── INIT ──────────────────────────────────────────────
 initParticles();
 loadStats();
+
+// Validate and repair puzzle bank, then persist
 Object.keys(PUZZLES).forEach(level => {
-  PUZZLES[level].forEach(([givenStr, solutionStr]) => {
-    const solution = parseBoard(solutionStr);
+  PUZZLES[level] = PUZZLES[level].map(([givenStr, solutionStr]) => {
+    const given = parseBoard(givenStr);
+    let solution = parseBoard(solutionStr);
     if (!isValidSolution(solution)) {
-      console.error(`Invalid solution in ${level}:`, solutionStr);
+      console.warn(`Invalid solution in ${level}, regenerating:`, solutionStr);
+      solution = solveSudokuBacktrack(deepCopy(given));
     }
+    return [givenStr, boardToStr(solution)];
   });
 });
+
+// Save repaired puzzles permanently
+localStorage.setItem('sudoku-pro-puzzles', JSON.stringify(PUZZLES));
+
+// If you want to load repaired puzzles next time:
+const savedPuzzles = localStorage.getItem('sudoku-pro-puzzles');
+if (savedPuzzles) {
+  Object.assign(PUZZLES, JSON.parse(savedPuzzles));
+}
 
 showScreen('screen-menu');
